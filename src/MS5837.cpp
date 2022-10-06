@@ -1,4 +1,5 @@
 #include "MS5837.h"
+#include <Arduino.h>
 #include <Wire.h>
 
 const uint8_t MS5837_ADDR = 0x76;
@@ -7,6 +8,10 @@ const uint8_t MS5837_ADC_READ = 0x00;
 const uint8_t MS5837_PROM_READ = 0xA0;
 const uint8_t MS5837_CONVERT_D1_8192 = 0x4A;
 const uint8_t MS5837_CONVERT_D2_8192 = 0x5A;
+const uint8_t MS5837_CONVERT_D1_256 = 0x40;
+const uint8_t MS5837_CONVERT_D2_256 = 0x50;
+
+
 
 const float MS5837::Pa = 100.0f;
 const float MS5837::bar = 0.001f;
@@ -22,6 +27,93 @@ const uint8_t MS5837_30BA26 = 0x1A; // Sensor version: From MS5837_30BA datashee
 
 MS5837::MS5837() {
 	fluidDensity = 1029;
+	_OSR = 0;
+	_conversionState = idling;
+}
+
+void MS5837::setOsr(uint8_t OSR){
+	if(OSR<6){
+		_OSR=OSR;
+	}
+}
+
+conversionState_t MS5837::checkMeasurement(){
+	return _conversionState;
+}
+
+void MS5837::startMeasurement(){
+	_conversionState=D1_conversion;
+	_delay = delayLUT[_OSR];//locks in delay in case OSR is changed during conversion
+}
+
+void MS5837::doMeasurement(){
+
+	if (_i2cPort == NULL)
+	{
+		return;
+	}
+
+	switch(_conversionState){
+		case idling:
+		break;
+		case done:
+		break;
+		case D1_conversion:
+		// Request D1 conversion
+		_i2cPort->beginTransmission(MS5837_ADDR);
+		_i2cPort->write(MS5837_CONVERT_D1_256 + (_OSR*2));
+		_i2cPort->endTransmission();
+
+		_startTime=millis();
+		_conversionState = D1_read;
+		break;
+
+		case D1_read:
+		if(millis()-_startTime>_delay)
+		{
+			_i2cPort->beginTransmission(MS5837_ADDR);
+			_i2cPort->write(MS5837_ADC_READ);
+			_i2cPort->endTransmission();
+
+			_i2cPort->requestFrom(MS5837_ADDR,3);
+			D1_pres = 0;
+			D1_pres = _i2cPort->read();
+			D1_pres = (D1_pres << 8) | _i2cPort->read();
+			D1_pres = (D1_pres << 8) | _i2cPort->read();
+
+			// Request D2 conversion
+			_i2cPort->beginTransmission(MS5837_ADDR);
+			_i2cPort->write(MS5837_CONVERT_D2_256 + (_OSR*2));
+			_i2cPort->endTransmission();
+
+			_startTime=millis();
+			_conversionState = D2_read;
+		}
+		//if its not time to read, just break and wait
+		break;
+
+		case D2_read:
+		if(millis()-_startTime>_delay)
+		{
+			_i2cPort->beginTransmission(MS5837_ADDR);
+			_i2cPort->write(MS5837_ADC_READ);
+			_i2cPort->endTransmission();
+
+			_i2cPort->requestFrom(MS5837_ADDR,3);
+			D2_temp = 0;
+			D2_temp = _i2cPort->read();
+			D2_temp = (D2_temp << 8) | _i2cPort->read();
+			D2_temp = (D2_temp << 8) | _i2cPort->read();
+
+			calculate();
+
+			_conversionState = done;
+		}
+		break;
+		//fall through switch if its not one of the states 
+		//that requires action
+
+	}
 }
 
 bool MS5837::begin(TwoWire &wirePort) {

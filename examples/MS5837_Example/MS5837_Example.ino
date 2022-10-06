@@ -65,14 +65,19 @@ void setup() {
   sensor.setFluidDensity(997); // kg/m^3 (freshwater, 1029 for seawater)
 }
 
+int counter = 0;
+int should_measure = 0;
+
+conversionState_t state;
+
 void loop() {
-  // Update pressure and temperature readings
-  sensor.read();
-
-  Serial.print("Pressure: ");
-  Serial.print(sensor.pressure());
-  Serial.println(" mbar");
-
+sensor.startMeasurement();
+while(1){
+state = sensor.checkMeasurement();
+Serial.println(state);
+switch(state)
+{
+  case done:
   Serial.print("Temperature: ");
   Serial.print(sensor.temperature());
   Serial.println(" deg C");
@@ -80,10 +85,25 @@ void loop() {
   Serial.print("Depth: ");
   Serial.print(sensor.depth());
   Serial.println(" m");
+  sensor.startMeasurement();
+  counter++;
+  if(counter>6)
+  {
+    counter = 0;
+  }
+  Serial.print("OSR ");
+  Serial.println(counter);
+  sensor.setOsr(counter);
+  break;
+  case idling:
+    break;
+  default:
+    sensor.doMeasurement();
+    break;
+}
+state = sensor.checkMeasurement();
+Serial.println(state);
+}
 
-  Serial.print("Altitude: ");
-  Serial.print(sensor.altitude());
-  Serial.println(" m above mean sea level");
 
-  delay(1000);
 }

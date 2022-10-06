@@ -40,6 +40,15 @@ THE SOFTWARE.
 #include "Arduino.h"
 #include <Wire.h>
 
+typedef enum conversionState_t
+{
+	D1_conversion,
+	D1_read,
+	D2_read,
+	done,
+	idling //special state that only happens on init.
+} conversionState_t;
+
 class MS5837 {
 public:
 	static const float Pa;
@@ -87,6 +96,27 @@ public:
 	 */
 	float altitude();
 
+	/** Sets the oversampling rate; higher oversampling takes more time but is more accurate
+	*/
+	void setOsr(uint8_t OSR);
+
+
+	/** returns internal conversion state
+	*/
+
+	conversionState_t checkMeasurement();
+
+	/** starts measurement next time doMeasurement() is called
+	*/
+
+	void startMeasurement();
+
+	/** does the next measurement task, or does nothing if the stat
+	is done or idling
+	*/
+
+	void doMeasurement();
+
 private:
 
 	//This stores the requested i2c port
@@ -97,6 +127,20 @@ private:
 	int32_t TEMP;
 	int32_t P;
 	uint8_t _model;
+	uint8_t _OSR;
+	uint _startTime;
+	uint _delay;
+	conversionState_t _conversionState;
+
+	/**delay lookup table by OSR
+	0 OSR => 256  =>  0.60 ms
+	1 OSR => 512  =>  1.17 ms
+	2 OSR => 1024 =>  2.28 ms
+	3 OSR => 2048 =>  4.54 ms
+	4 OSR => 4096 =>  9.04 ms
+	5 OSR => 8192 => 18.08 ms
+	*/
+	uint delayLUT[6] = {1, 2, 3, 5, 10, 20}; //delay by osr in ms, rounded up
 
 	float fluidDensity;
 
