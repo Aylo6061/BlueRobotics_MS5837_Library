@@ -42,8 +42,11 @@ conversionState_t MS5837::checkMeasurement(){
 }
 
 void MS5837::startMeasurement(){
-	_conversionState=D1_conversion;
-	_delay = delayLUT[_OSR];//locks in delay in case OSR is changed during conversion
+	if(_conversionState == idling || _conversionState == done)
+	{
+		_conversionState=D1_conversion;
+		_delay = delayLUT[_OSR];//locks in delay in case OSR is changed during conversion
+	}
 }
 
 void MS5837::doMeasurement(){
